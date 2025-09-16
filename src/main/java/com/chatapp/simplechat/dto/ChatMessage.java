@@ -15,7 +15,8 @@ public class ChatMessage {
         LEAVE, // User left the chat
         TYPING, // User is typing
         ONLINE, // User came online
-        OFFLINE // User went offline
+        OFFLINE, // User went offline
+        READ // Read receipt / status update
     }
 
     // Default constructor

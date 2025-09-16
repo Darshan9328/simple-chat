@@ -1,13 +1,17 @@
 package com.chatapp.simplechat.controller;
 
+import com.chatapp.simplechat.dto.ChatMessage;
 import com.chatapp.simplechat.model.Conversation;
 import com.chatapp.simplechat.model.Message;
+import com.chatapp.simplechat.model.MessageStatus;
 import com.chatapp.simplechat.model.User;
 import com.chatapp.simplechat.repository.ConversationRepository;
 import com.chatapp.simplechat.repository.MessageRepository;
 import com.chatapp.simplechat.repository.UserRepository;
+import com.chatapp.simplechat.service.WebSocketSessionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
@@ -27,11 +31,14 @@ public class ConversationController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private WebSocketSessionService sessionService;
+
     // Get all conversations for a user
     @GetMapping("/{username}")
     public ResponseEntity<List<Map<String, Object>>> getUserConversations(@PathVariable String username) {
         List<Conversation> conversations = conversationRepository.findByUserUsername(username);
-        
+
         List<Map<String, Object>> conversationDTOs = conversations.stream().map(conv -> {
             Map<String, Object> dto = new HashMap<>();
             dto.put("id", conv.getId());
@@ -39,14 +46,14 @@ public class ConversationController {
             dto.put("lastMessage", conv.getLastMessage());
             dto.put("lastMessageTime", conv.getLastMessageTime());
             dto.put("lastMessageSender", conv.getLastMessageSender());
-            
+
             // Get unread message count
             Long unreadCount = messageRepository.countUnreadMessages(conv.getId(), username);
             dto.put("unreadCount", unreadCount);
-            
+
             return dto;
         }).collect(Collectors.toList());
-        
+
         return ResponseEntity.ok(conversationDTOs);
     }
 
@@ -62,18 +69,18 @@ public class ConversationController {
     public ResponseEntity<Map<String, Object>> startConversation(@RequestBody Map<String, String> request) {
         String user1 = request.get("user1");
         String user2 = request.get("user2");
-        
+
         // Check if both users exist
         Optional<User> userObj1 = userRepository.findByUsername(user1);
         Optional<User> userObj2 = userRepository.findByUsername(user2);
-        
+
         if (!userObj1.isPresent() || !userObj2.isPresent()) {
             return ResponseEntity.badRequest().body(Map.of("error", "One or both users do not exist"));
         }
-        
+
         // Check if conversation already exists
         Optional<Conversation> existingConv = conversationRepository.findByTwoUsers(user1, user2);
-        
+
         Conversation conversation;
         if (existingConv.isPresent()) {
             conversation = existingConv.get();
@@ -82,11 +89,11 @@ public class ConversationController {
             conversation = new Conversation(user1, user2);
             conversation = conversationRepository.save(conversation);
         }
-        
+
         Map<String, Object> response = new HashMap<>();
         response.put("conversationId", conversation.getId());
         response.put("otherParticipant", conversation.getOtherParticipant(user1));
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -100,7 +107,7 @@ public class ConversationController {
         } else {
             users = userRepository.findByUsernameContainingIgnoreCase(query);
         }
-        
+
         // Exclude current user and convert to DTO
         List<Map<String, Object>> userDTOs = users.stream()
                 .filter(user -> !user.getUsername().equals(currentUser))
@@ -111,18 +118,39 @@ public class ConversationController {
                     return dto;
                 })
                 .collect(Collectors.toList());
-        
+
         return ResponseEntity.ok(userDTOs);
     }
 
     // Mark messages as read
     @PostMapping("/{conversationId}/mark-read")
+    @Transactional
     public ResponseEntity<Map<String, Object>> markMessagesAsRead(
             @PathVariable String conversationId,
             @RequestParam String username) {
-        
-        // This would typically update message status to READ
-        // For now, we'll just return success
-        return ResponseEntity.ok(Map.of("message", "Messages marked as read"));
+
+        // Persist READ status for all messages in conversation addressed to this username
+        int updated = messageRepository.markAsRead(conversationId, username, MessageStatus.READ);
+
+        // Broadcast READ status via WebSocket to the other participant
+        Optional<Conversation> convOpt = conversationRepository.findById(conversationId);
+        convOpt.ifPresent(conv -> {
+            String other = conv.getOtherParticipant(username);
+            ChatMessage status = new ChatMessage();
+            status.setType(ChatMessage.MessageType.READ);
+            status.setConversationId(conversationId);
+            status.setSender(username); // reader
+            status.setRecipient(other);
+            status.setTimestamp(java.time.LocalDateTime.now().toString());
+
+            sessionService.sendMessageToUser(other, "/queue/status", status);
+            // Optionally also notify the reader for confirmation
+            sessionService.sendMessageToUser(username, "/queue/status", status);
+        });
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Messages marked as read",
+                "updated", updated
+        ));
     }
 }
