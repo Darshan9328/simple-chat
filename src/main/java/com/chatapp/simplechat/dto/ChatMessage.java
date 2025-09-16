@@ -3,13 +3,19 @@ package com.chatapp.simplechat.dto;
 public class ChatMessage {
     private String content;
     private String sender;
+    private String recipient;
+    private String conversationId;
     private MessageType type;
     private String timestamp;
+    private String status;
 
     public enum MessageType {
         CHAT, // Regular chat message
         JOIN, // User joined the chat
-        LEAVE // User left the chat
+        LEAVE, // User left the chat
+        TYPING, // User is typing
+        ONLINE, // User came online
+        OFFLINE // User went offline
     }
 
     // Default constructor
@@ -22,6 +28,18 @@ public class ChatMessage {
         this.sender = sender;
         this.type = type;
         this.timestamp = java.time.LocalDateTime.now().toString();
+        this.status = "SENT";
+    }
+
+    // Constructor for private messages
+    public ChatMessage(String content, String sender, String recipient, String conversationId, MessageType type) {
+        this.content = content;
+        this.sender = sender;
+        this.recipient = recipient;
+        this.conversationId = conversationId;
+        this.type = type;
+        this.timestamp = java.time.LocalDateTime.now().toString();
+        this.status = "SENT";
     }
 
     // Getters and Setters
@@ -55,5 +73,29 @@ public class ChatMessage {
 
     public void setTimestamp(String timestamp) {
         this.timestamp = timestamp;
+    }
+
+    public String getRecipient() {
+        return recipient;
+    }
+
+    public void setRecipient(String recipient) {
+        this.recipient = recipient;
+    }
+
+    public String getConversationId() {
+        return conversationId;
+    }
+
+    public void setConversationId(String conversationId) {
+        this.conversationId = conversationId;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

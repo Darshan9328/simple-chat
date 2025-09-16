@@ -68,11 +68,6 @@ public class ChatController {
         }
     }
 
-    @GetMapping("/messages")
-    public ResponseEntity<List<Message>> getMessages() {
-        List<Message> messages = chatService.getRecentMessages();
-        return ResponseEntity.ok(messages);
-    }
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser() {
@@ -80,5 +75,51 @@ public class ChatController {
         String username = authentication.getName();
 
         return ResponseEntity.ok(Map.of("username", username));
+    }
+
+    @GetMapping("/users")
+    public ResponseEntity<?> getAllUsers() {
+        try {
+            // Get all users except the current user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String currentUsername = authentication.getName();
+            
+            // For now, return some sample users - you can enhance this by creating a proper user service
+            List<String> users = List.of("user1", "user2", "user3", "alice", "bob", "charlie");
+            users = users.stream()
+                    .filter(user -> !user.equals(currentUsername))
+                    .collect(java.util.stream.Collectors.toList());
+            
+            return ResponseEntity.ok(users);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+
+    @GetMapping("/conversations")
+    public ResponseEntity<?> getUserConversations() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            
+            List<com.chatapp.simplechat.model.Conversation> conversations = 
+                chatService.getUserConversations(username);
+            return ResponseEntity.ok(conversations);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/online-users")
+    public ResponseEntity<?> getOnlineUsers() {
+        try {
+            // This would need to be injected from WebSocketSessionService
+            // For now, return the sample users
+            List<String> users = List.of("user1", "user2", "user3", "alice", "bob", "charlie");
+            return ResponseEntity.ok(users);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 }
